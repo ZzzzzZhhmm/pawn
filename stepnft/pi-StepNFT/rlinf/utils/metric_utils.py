@@ -1,0 +1,211 @@
+# Copyright 2025 The RLinf Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import math
+
+import torch
+import torch.distributed
+
+
+def compute_split_num(num, split_num):
+    return math.lcm(num, split_num) // split_num
+
+
+def count_trajectories(metrics_dict):
+    """
+    Count the total number of trajectories from metrics dictionary.
+
+    Args:
+        metrics_dict: Dictionary of metrics where each value is a tensor after concatenation.
+                     Each tensor's first dimension represents the number of trajectories.
+
+    Returns:
+        int: Total number of trajectories. If metrics_dict is empty, returns 0.
+    """
+    if not metrics_dict:
+        return 0
+
+    # Use the first metric tensor to get the trajectory count
+    # All metrics should have the same first dimension (number of trajectories)
+    first_key = next(iter(metrics_dict.keys()))
+    first_tensor = metrics_dict[first_key]
+
+    if isinstance(first_tensor, torch.Tensor):
+        return first_tensor.shape[0]
+    elif isinstance(first_tensor, list):
+        # If it's a list of tensors, sum up all trajectory counts
+        return sum(
+            t.shape[0] if isinstance(t, torch.Tensor) else len(t) for t in first_tensor
+        )
+    else:
+        raise TypeError(f"Unsupported tensor type: {type(first_tensor)}")
+
+
+def compute_evaluate_metrics(eval_metrics_list):
+    """
+    List of evaluate metrics, list length stands for rollout process
+
+    Returns:
+        dict: Aggregated metrics with mean values and trajectory count
+    """
+    all_eval_metrics = {}
+    env_info_keys = eval_metrics_list[0].keys()
+
+    # Count trajectories from each process
+    # If num_trajectories is already in the metrics, use it; otherwise count from tensor shape
+    trajectory_counts = []
+    for eval_metrics in eval_metrics_list:
+        count = count_trajectories(eval_metrics)
+        trajectory_counts.append(count)
+
+    for env_info_key in env_info_keys:
+        all_eval_metrics[env_info_key] = [
+            eval_metrics[env_info_key] for eval_metrics in eval_metrics_list
+        ]
+
+    for key in all_eval_metrics:
+        all_eval_metrics[key] = (
+            torch.concat(all_eval_metrics[key]).float().mean().numpy()
+        )
+
+    # Add total trajectory count to metrics
+    all_eval_metrics["num_trajectories"] = sum(trajectory_counts)
+
+    return all_eval_metrics
+
+
+def compute_rollout_metrics(data_buffer: dict) -> dict:
+    rollout_metrics = {}
+
+    if "rewards" in data_buffer:
+        rewards = data_buffer["rewards"].clone()
+        mean_rewards = torch.mean(rewards).to(torch.cuda.current_device())
+        torch.distributed.all_reduce(mean_rewards, op=torch.distributed.ReduceOp.AVG)
+
+        rewards_metrics = {
+            "rewards": mean_rewards.item(),
+        }
+        rollout_metrics.update(rewards_metrics)
+
+    if "advantages" in data_buffer:
+        advantages = data_buffer["advantages"]
+        mean_adv = torch.mean(advantages).to(torch.cuda.current_device())
+        torch.distributed.all_reduce(mean_adv, op=torch.distributed.ReduceOp.AVG)
+        max_adv = torch.max(advantages).detach().item()
+        min_adv = torch.min(advantages).detach().item()
+        reduce_adv_tensor = torch.as_tensor(
+            [-min_adv, max_adv], device=torch.cuda.current_device(), dtype=torch.float32
+        )
+        torch.distributed.all_reduce(
+            reduce_adv_tensor, op=torch.distributed.ReduceOp.MAX
+        )
+        min_adv, max_adv = reduce_adv_tensor.tolist()
+
+        advantages_metrics = {
+            "advantages_mean": mean_adv.item(),
+            "advantages_max": max_adv,
+            "advantages_min": -min_adv,
+        }
+        rollout_metrics.update(advantages_metrics)
+
+    if data_buffer.get("returns", None) is not None:
+        returns = data_buffer["returns"]
+        mean_ret = torch.mean(returns).to(torch.cuda.current_device())
+        torch.distributed.all_reduce(mean_ret, op=torch.distributed.ReduceOp.AVG)
+        max_ret = torch.max(returns).detach().item()
+        min_ret = torch.min(returns).detach().item()
+        reduce_ret_tensor = torch.as_tensor(
+            [-min_ret, max_ret], device=torch.cuda.current_device(), dtype=torch.float32
+        )
+        torch.distributed.all_reduce(
+            reduce_ret_tensor, op=torch.distributed.ReduceOp.MAX
+        )
+        min_ret, max_ret = reduce_ret_tensor.tolist()
+
+        returns_metrics = {
+            "returns_mean": mean_ret.item(),
+            "returns_max": max_ret,
+            "returns_min": -min_ret,
+        }
+        rollout_metrics.update(returns_metrics)
+
+    return rollout_metrics
+
+
+def append_to_dict(data, new_data):
+    for key, val in new_data.items():
+        if key not in data:
+            data[key] = []
+        data[key].append(val)
+
+
+def compute_loss_mask(dones):
+    _, actual_bsz, num_action_chunks = dones.shape
+    n_chunk_step = dones.shape[0] - 1
+    flattened_dones = dones.transpose(1, 2).reshape(
+        -1, actual_bsz
+    )  # [(n_chunk_step + 1) * num_action_chunks, rollout_epoch x bsz]
+    flattened_dones = flattened_dones[
+        -(n_chunk_step * num_action_chunks + 1) :
+    ]  # [n_steps+1, actual-bsz]
+    flattened_loss_mask = (flattened_dones.cumsum(dim=0) == 0)[
+        :-1
+    ]  # [n_steps, actual-bsz]
+
+    loss_mask = flattened_loss_mask.reshape(n_chunk_step, num_action_chunks, actual_bsz)
+    loss_mask = loss_mask.transpose(
+        1, 2
+    )  # [n_chunk_step, actual_bsz, num_action_chunks]
+
+    loss_mask_sum = loss_mask.sum(dim=(0, 2), keepdim=True)  # [1, bsz, 1]
+    loss_mask_sum = loss_mask_sum.expand_as(loss_mask)
+
+    return loss_mask, loss_mask_sum
+
+
+def compute_time_decay_weights(
+    loss_mask: torch.Tensor, gamma: float, epsilon: float
+) -> torch.Tensor:
+    """
+    Generate per-timestep exponential decay weights for credit assignment.
+
+    Args:
+        loss_mask: Boolean/float mask of shape [n_chunk_step, batch, num_action_chunks]
+            indicating which timesteps are valid.
+        gamma: Exponential base. Should be in (0, 1] to decay towards early timesteps.
+        epsilon: Floor value to avoid vanishing gradients.
+
+    Returns:
+        Tensor of the same shape as loss_mask containing decay weights.
+    """
+    mask_float = loss_mask.float()
+    n_steps = mask_float.shape[0]
+    step_idx = (
+        torch.arange(n_steps, device=mask_float.device, dtype=mask_float.dtype)
+        .view(-1, 1, 1)
+    )
+
+    last_valid_idx = mask_float.sum(dim=0, keepdim=True) - 1.0
+    last_valid_idx = last_valid_idx.clamp_min(0.0)
+
+    distance_to_terminal = (last_valid_idx - step_idx).clamp_min(0.0)
+    base = torch.tensor(float(gamma), device=mask_float.device, dtype=mask_float.dtype)
+    weight_floor = torch.tensor(
+        float(epsilon), device=mask_float.device, dtype=mask_float.dtype
+    )
+
+    weights = torch.pow(base, distance_to_terminal)
+    weights = torch.maximum(weights, weight_floor)
+
+    return weights * mask_float
