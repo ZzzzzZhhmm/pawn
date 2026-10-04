@@ -1,4 +1,5 @@
 # Copyright 2025 The RLinf Authors.
+# Modified for the PAWN OpenPI training release (2026).
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,7 +31,6 @@ from rlinf.models.embodiment.base_policy import BasePolicy, ForwardType
 from rlinf.models.embodiment.modules import action_solvers
 from rlinf.models.embodiment.modules.explore_noise_net import ExploreNoiseNet
 from rlinf.models.embodiment.modules.value_head import ValueHead
-
 
 NON_NFT_SOLVERS = {"flow_sde", "flow_noise", "flow_cps"}
 ALL_SOLVERS = {

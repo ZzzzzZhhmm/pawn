@@ -1,4 +1,5 @@
 # Copyright 2025 The RLinf Authors.
+# Modified for the PAWN OpenPI training release (2026).
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,6 +14,7 @@
 # limitations under the License.
 
 import multiprocessing
+import os
 import traceback
 import warnings
 from multiprocessing import connection
@@ -62,8 +64,8 @@ from rlinf.envs.venv import (
     EnvWorker,
     ShArray,
     SubprocEnvWorker,
-    SubprocVectorEnv,
     SubprocError,
+    SubprocVectorEnv,
     _setup_buf,
 )
 

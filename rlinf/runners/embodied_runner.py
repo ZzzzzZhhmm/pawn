@@ -1,4 +1,5 @@
 # Copyright 2025 The RLinf Authors.
+# Modified for the PAWN OpenPI training release (2026).
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,12 +16,11 @@
 import json
 import os
 import time
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 from omegaconf.dictconfig import DictConfig
 from tqdm import tqdm
 
-from rlinf.data.replay_buffer import SACReplayBuffer
 from rlinf.scheduler import Channel
 from rlinf.scheduler import WorkerGroupFuncResult as Handle
 from rlinf.utils.distributed import ScopedTimer
@@ -29,16 +29,8 @@ from rlinf.utils.metric_utils import compute_evaluate_metrics
 from rlinf.utils.runner_utils import check_progress
 
 if TYPE_CHECKING:
-    from rlinf.workers.actor.async_fsdp_sac_policy_worker import (
-        AsyncEmbodiedSACFSDPPolicy,
-    )
     from rlinf.workers.actor.fsdp_actor_worker import EmbodiedFSDPActor
-    from rlinf.workers.actor.fsdp_sac_policy_worker import EmbodiedSACFSDPPolicy
-    from rlinf.workers.env.async_env_worker import AsyncEnvWorker
     from rlinf.workers.env.env_worker import EnvWorker
-    from rlinf.workers.rollout.hf.async_huggingface_worker import (
-        AsyncMultiStepRolloutWorker,
-    )
     from rlinf.workers.rollout.hf.huggingface_worker import MultiStepRolloutWorker
 
 
@@ -46,12 +38,9 @@ class EmbodiedRunner:
     def __init__(
         self,
         cfg: DictConfig,
-        actor: Union[
-            "EmbodiedFSDPActor", "EmbodiedSACFSDPPolicy", "AsyncEmbodiedSACFSDPPolicy"
-        ],
-        rollout: Union["MultiStepRolloutWorker", "AsyncMultiStepRolloutWorker"],
-        env: Union["EnvWorker", "AsyncEnvWorker"],
-        demo_buffer: Optional[SACReplayBuffer] = None,
+        actor: "EmbodiedFSDPActor",
+        rollout: "MultiStepRolloutWorker",
+        env: "EnvWorker",
         critic=None,
         reward=None,
         run_timer=None,
@@ -60,7 +49,6 @@ class EmbodiedRunner:
         self.actor = actor
         self.rollout = rollout
         self.env = env
-        self.demo_buffer = demo_buffer
         self.critic = critic
         self.reward = reward
 
@@ -68,8 +56,6 @@ class EmbodiedRunner:
         self.env_channel = Channel.create("Env")
         self.rollout_channel = Channel.create("Rollout")
         self.actor_channel = Channel.create("Actor")
-        if self.demo_buffer is not None:
-            self.demo_data_channel = Channel.create("DemoBufferChannel")
 
         # this timer checks if we should stop training
         self.run_timer = run_timer
@@ -119,14 +105,6 @@ class EmbodiedRunner:
         self.actor.load_checkpoint(actor_checkpoint_path).wait()
         self.global_step = int(resume_dir.split("global_step_")[-1])
 
-    def send_demo_buffer(self):
-        if self.demo_buffer is not None:
-            sub_demo_buffer_ls = self.demo_buffer.split_to_dict(self.actor._world_size)
-
-            for sub_demo_buffer in sub_demo_buffer_ls:
-                self.demo_data_channel.put(sub_demo_buffer, async_op=True)
-            self.actor.recv_demo_data(self.demo_data_channel).wait()
-
     def update_rollout_weights(self):
         rollout_handle: Handle = self.rollout.sync_model_from_actor()
         actor_handle: Handle = self.actor.sync_model_to_rollout()
@@ -156,7 +134,6 @@ class EmbodiedRunner:
             desc="Global Step",
             ncols=5000,
         )
-        self.send_demo_buffer()
         for _step in range(start_step, self.max_steps):
             # set global step
             self.actor.set_global_step(self.global_step)
@@ -169,9 +146,7 @@ class EmbodiedRunner:
             with self.timer("step"):
                 with self.timer("sync_weights"):
                     self.update_rollout_weights()
-                runner_msg = (
-                    f"[runner] step={self.global_step} start generate_rollouts"
-                )
+                runner_msg = f"[runner] step={self.global_step} start generate_rollouts"
                 print(runner_msg, flush=True)
                 self._append_runner_event(runner_msg)
                 with self.timer("generate_rollouts"):
@@ -233,11 +208,13 @@ class EmbodiedRunner:
                                 actor_rank = int(item.get("actor_rank", -1))
                                 if actor_rank < 0:
                                     continue
-                                branch_results_by_rank.setdefault(actor_rank, []).append(
-                                    item
-                                )
+                                branch_results_by_rank.setdefault(
+                                    actor_rank, []
+                                ).append(item)
                         with self.timer("load_branch_rollouts"):
-                            self.actor.load_branch_results(branch_results_by_rank).wait()
+                            self.actor.load_branch_results(
+                                branch_results_by_rank
+                            ).wait()
                         runner_msg = (
                             f"[runner] step={self.global_step} branch_rollouts done "
                             f"results={sum(len(v) for v in branch_results_by_rank.values())}"

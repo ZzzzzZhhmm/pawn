@@ -1,4 +1,5 @@
 # Copyright 2025 The RLinf Authors.
+# Modified for the PAWN OpenPI training release (2026).
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,22 +21,9 @@ from rlinf.config import SupportedModel, get_supported_model, torch_dtype_from_p
 
 def get_model(cfg: DictConfig):
     model_type = get_supported_model(cfg.model_type)
-    if model_type == SupportedModel.OPENVLA:
-        from rlinf.models.embodiment.openvla import get_model
-    elif model_type == SupportedModel.OPENVLA_OFT:
-        from rlinf.models.embodiment.openvla_oft import get_model
-    elif model_type == SupportedModel.OPENPI:
-        from rlinf.models.embodiment.openpi import get_model
-    elif model_type == SupportedModel.MLP_POLICY:
-        from rlinf.models.embodiment.mlp_policy import get_model
-    elif model_type == SupportedModel.GR00T:
-        from rlinf.models.embodiment.gr00t import get_model
-    elif model_type == SupportedModel.CNN_POLICY:
-        from rlinf.models.embodiment.cnn_policy import get_model
-    elif model_type == SupportedModel.FLOW_POLICY:
-        from rlinf.models.embodiment.flow_policy import get_model
-    else:
-        return None
+    if model_type != SupportedModel.OPENPI:
+        raise ValueError("This release supports OpenPI pi0 and pi0.5 policies only.")
+    from rlinf.models.embodiment.openpi import get_model
 
     torch_dtype = torch_dtype_from_precision(cfg.precision)
     model = get_model(cfg, torch_dtype)

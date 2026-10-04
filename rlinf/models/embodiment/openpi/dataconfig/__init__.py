@@ -1,4 +1,5 @@
 # Copyright 2025 The RLinf Authors.
+# Modified for the PAWN OpenPI training release (2026).
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,29 +27,11 @@ from openpi.training.config import (
     TrainConfig,
 )
 
-from rlinf.models.embodiment.openpi.dataconfig.behavior_dataconfig import (
-    LeRobotBehaviorDataConfig,
-)
-from rlinf.models.embodiment.openpi.dataconfig.calvin_dataconfig import (
-    LeRobotCalvinDataConfig,
-)
-from rlinf.models.embodiment.openpi.dataconfig.franka_dataconfig import (
-    CustomDataConfig,
-)
 from rlinf.models.embodiment.openpi.dataconfig.libero_dataconfig import (
     LeRobotLiberoDataConfig,
 )
 from rlinf.models.embodiment.openpi.dataconfig.maniskill_dataconfig import (
     LeRobotManiSkillDataConfig,
-)
-from rlinf.models.embodiment.openpi.dataconfig.metaworld_dataconfig import (
-    LeRobotMetaworldDataConfig,
-)
-from rlinf.models.embodiment.openpi.dataconfig.robocasa_dataconfig import (
-    LeRobotRobocasaDataConfig,
-)
-from rlinf.models.embodiment.openpi.dataconfig.robotwin_aloha_dataconfig import (
-    LeRobotAlohaDataConfig,
 )
 
 _CONFIGS = [
@@ -112,7 +95,7 @@ _CONFIGS = [
         name="pi05_maniskill",
         model=pi0_config.Pi0Config(
             pi05=True, action_horizon=10, discrete_state_input=False
-        ),  # discrete_state_input=False: stateless policy, True: with state policy
+        ),
         data=LeRobotManiSkillDataConfig(
             repo_id="physical-intelligence/maniskill",
             base_config=DataConfig(prompt_from_task=True),
@@ -131,129 +114,6 @@ _CONFIGS = [
         num_train_steps=5_000,
         log_interval=5,
         save_interval=250,
-    ),
-    TrainConfig(
-        name="pi0_metaworld",
-        model=pi0_config.Pi0Config(action_horizon=5),
-        data=LeRobotMetaworldDataConfig(
-            repo_id="lerobot/metaworld_mt50",
-            base_config=DataConfig(prompt_from_task=True),
-            assets=AssetsConfig(assets_dir="checkpoints/torch/pi0_metaworld/assets"),
-            extra_delta_transform=False,
-        ),
-        weight_loader=weight_loaders.CheckpointWeightLoader(
-            "checkpoints/jax/pi0_base/params"
-        ),
-        pytorch_weight_path="checkpoints/torch/pi0_base",
-    ),
-    TrainConfig(
-        name="pi05_metaworld",
-        model=pi0_config.Pi0Config(
-            pi05=True, action_horizon=5, discrete_state_input=False
-        ),
-        data=LeRobotMetaworldDataConfig(
-            repo_id="lerobot/metaworld_mt50",
-            base_config=DataConfig(prompt_from_task=True),
-            assets=AssetsConfig(assets_dir="checkpoints/torch/pi0_metaworld/assets"),
-            extra_delta_transform=False,
-        ),
-        weight_loader=weight_loaders.CheckpointWeightLoader(
-            "checkpoints/jax/pi05_base/params"
-        ),
-        pytorch_weight_path="checkpoints/torch/pi05_base",
-    ),
-    TrainConfig(
-        name="pi0_calvin",
-        model=pi0_config.Pi0Config(action_horizon=5),
-        data=LeRobotCalvinDataConfig(
-            repo_id="InternRobotics/InternData-Calvin_ABC",
-            base_config=DataConfig(
-                prompt_from_task=True,
-            ),
-            assets=AssetsConfig(assets_dir="checkpoints/torch/pi0_calvin/assets"),
-            extra_delta_transform=False,
-        ),
-        weight_loader=weight_loaders.CheckpointWeightLoader(
-            "checkpoints/jax/pi0_base/params"
-        ),
-        pytorch_weight_path="checkpoints/torch/pi0_base",
-        num_train_steps=30_000,
-    ),
-    TrainConfig(
-        name="pi05_calvin",
-        model=pi0_config.Pi0Config(
-            pi05=True, action_horizon=5, discrete_state_input=False
-        ),
-        data=LeRobotCalvinDataConfig(
-            repo_id="InternRobotics/InternData-Calvin_ABC",
-            base_config=DataConfig(
-                prompt_from_task=True,
-            ),
-            assets=AssetsConfig(assets_dir="checkpoints/torch/pi0_calvin/assets"),
-            extra_delta_transform=False,
-        ),
-        weight_loader=weight_loaders.CheckpointWeightLoader(
-            "checkpoints/jax/pi05_base/params"
-        ),
-        pytorch_weight_path="checkpoints/torch/pi05_base",
-        num_train_steps=30_000,
-    ),
-    TrainConfig(
-        name="pi0_robocasa",
-        model=pi0_config.Pi0Config(action_horizon=10),
-        data=LeRobotRobocasaDataConfig(
-            repo_id="physical-intelligence/robocasa",
-            base_config=DataConfig(prompt_from_task=True),
-            assets=AssetsConfig(assets_dir="checkpoints/torch/pi0_robocasa/assets"),
-            extra_delta_transform=False,
-        ),
-        weight_loader=weight_loaders.CheckpointWeightLoader(
-            "checkpoints/jax/pi0_base/params"
-        ),
-        pytorch_weight_path="checkpoints/torch/pi0_base",
-        num_train_steps=30_000,
-    ),
-    TrainConfig(
-        name="pi0_aloha_robotwin",
-        model=pi0_config.Pi0Config(),
-        data=LeRobotAlohaDataConfig(
-            repo_id="robotwin/place_empty_cup_random",
-            base_config=DataConfig(
-                prompt_from_task=True
-            ),  # we need language instruction
-            assets=AssetsConfig(assets_dir="checkpoints/torch/pi0_robotwin/assets"),
-            extra_delta_transform=True,  # True for delta action, False for abs_action
-        ),
-        pytorch_weight_path="checkpoints/torch/pi0_base",
-    ),
-    TrainConfig(
-        name="pi0_behavior",
-        model=pi0_config.Pi0Config(),
-        data=LeRobotBehaviorDataConfig(
-            repo_id="physical-intelligence/behavior",
-            base_config=DataConfig(prompt_from_task=True),
-            assets=AssetsConfig(assets_dir="checkpoints/torch/pi0_behavior/assets"),
-            extra_delta_transform=True,
-        ),
-        weight_loader=weight_loaders.CheckpointWeightLoader(
-            "checkpoints/jax/pi0_base/params"
-        ),
-        pytorch_weight_path="checkpoints/torch/pi0_base",
-        num_train_steps=30_000,
-    ),
-    TrainConfig(
-        name="pi0_custom",
-        model=pi0_config.Pi0Config(),
-        data=CustomDataConfig(
-            repo_id="physical-intelligence/custom_dataset",
-            base_config=DataConfig(
-                prompt_from_task=True
-            ),  # we need language instruction
-            assets=AssetsConfig(assets_dir="checkpoints/torch/pi0_base/assets"),
-            extra_delta_transform=False,  # True for delta action, False for abs_action
-            action_train_with_rotation_6d=False,  # User can add extra config in custom dataset
-        ),
-        pytorch_weight_path="checkpoints/torch/pi0_base",
     ),
 ]
 

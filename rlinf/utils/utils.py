@@ -1,4 +1,5 @@
 # Copyright 2025 The RLinf Authors.
+# Modified for the PAWN OpenPI training release (2026).
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,11 +21,11 @@ import sys
 from contextlib import contextmanager
 from functools import partial, wraps
 from typing import Callable, Literal, Optional
-from omegaconf.dictconfig import DictConfig
 
 import numpy as np
 import torch
 import torch.nn.functional as F
+from omegaconf.dictconfig import DictConfig
 from torch.distributed.tensor import DTensor
 from torch.optim import Optimizer
 

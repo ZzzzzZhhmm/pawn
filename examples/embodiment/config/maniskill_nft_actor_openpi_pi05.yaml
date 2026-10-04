@@ -1,16 +1,15 @@
 defaults:
-  - env/maniskill_put_on_plate_in_scene_25_main@env.train
-  - env/maniskill_put_on_plate_in_scene_25_main@env.eval
-  - model/pi0_5@actor.model
-  - training_backend/fsdp@actor.fsdp_config
+  - env@env.train: maniskill_put_on_plate_in_scene_25_main
+  - env@env.eval: maniskill_put_on_plate_in_scene_25_main
+  - model@actor.model: pi0_5
+  - training_backend@actor.fsdp_config: fsdp
   - override hydra/job_logging: stdout
+  - _self_
 
 hydra:
   run:
     dir: .
   output_subdir: null
-  searchpath:
-    - file://${oc.env:EMBODIED_PATH}/config/
 
 cluster:
   num_nodes: 1
@@ -26,8 +25,8 @@ cluster:
 runner:
   task_type: embodied
   logger:
-    log_path: "../results"
-    project_name: rlinf
+    log_path: ${oc.env:PAWN_OUTPUT_DIR,outputs}
+    project_name: pawn
     experiment_name: "maniskill_nft_actor_openpi_pi05"
     logger_backends: ["tensorboard"] # wandb, swanlab
 
@@ -202,7 +201,7 @@ rollout:
   pipeline_stage_num: 1
 
   model:
-    model_path: "/path/to/model/RLinf-Pi05-ManiSkill-25Main-SFT"
+    model_path: ${actor.model.model_path}
     precision: ${actor.model.precision}
 
 actor:
@@ -214,7 +213,7 @@ actor:
   enable_offload: False
 
   model:
-    model_path: "/path/to/model/RLinf-Pi05-ManiSkill-25Main-SFT"
+    model_path: ${oc.env:PAWN_MODEL_PATH,checkpoints/RLinf-Pi05-ManiSkill-25Main-SFT}
     model_name: "openpi"
     precision: null
     num_action_chunks: 5

@@ -1,7 +1,7 @@
 model_type: "openpi"
 
 # Model path - should be set in specific config files
-model_path: "/path/to/model/openpi"
+model_path: ${oc.env:PAWN_MODEL_PATH,checkpoints/openpi}
 
 precision: null
 

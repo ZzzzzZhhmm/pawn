@@ -1,4 +1,5 @@
 # Copyright 2025 The RLinf Authors.
+# Modified for the PAWN OpenPI training release (2026).
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,7 +30,9 @@ mp.set_start_method("spawn", force=True)
 
 
 @hydra.main(
-    version_base="1.1", config_path="config", config_name="maniskill_ppo_openvlaoft"
+    version_base="1.1",
+    config_path="config",
+    config_name="libero_object_nft_actor_openpi",
 )
 def main(cfg) -> None:
     cfg = validate_cfg(cfg)
@@ -41,15 +44,9 @@ def main(cfg) -> None:
     # Create actor worker group
     actor_placement = component_placement.get_strategy("actor")
 
-    if cfg.algorithm.loss_type == "embodied_sac":
-        from rlinf.workers.actor.fsdp_sac_policy_worker import EmbodiedSACFSDPPolicy
+    from rlinf.workers.actor.fsdp_actor_worker import EmbodiedFSDPActor
 
-        actor_worker_cls = EmbodiedSACFSDPPolicy
-    else:
-        from rlinf.workers.actor.fsdp_actor_worker import EmbodiedFSDPActor
-
-        actor_worker_cls = EmbodiedFSDPActor
-    actor_group = actor_worker_cls.create_group(cfg).launch(
+    actor_group = EmbodiedFSDPActor.create_group(cfg).launch(
         cluster, name=cfg.actor.group_name, placement_strategy=actor_placement
     )
     # Create rollout worker group
@@ -64,18 +61,11 @@ def main(cfg) -> None:
         cluster, name=cfg.env.group_name, placement_strategy=env_placement
     )
 
-    demo_buffer = None
-    if cfg.get("data", None):
-        from rlinf.data.datasets import create_rl_dataset
-
-        demo_buffer, _ = create_rl_dataset(cfg, tokenizer=None)
-
     runner = EmbodiedRunner(
         cfg=cfg,
         actor=actor_group,
         rollout=rollout_group,
         env=env_group,
-        demo_buffer=demo_buffer,
     )
 
     runner.init_workers()

@@ -1,0 +1,4 @@
+include LICENSE NOTICE README.md
+include assets/pawn_overview.png
+recursive-include examples/embodiment *.py *.sh *.yaml
+include requirements/install.sh

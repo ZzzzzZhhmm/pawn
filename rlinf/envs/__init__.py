@@ -1,4 +1,5 @@
 # Copyright 2025 The RLinf Authors.
+# Modified for the PAWN OpenPI training release (2026).
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,85 +19,20 @@ from enum import Enum
 class SupportedEnvType(Enum):
     MANISKILL = "maniskill"
     LIBERO = "libero"
-    ROBOTWIN = "robotwin"
-    ISAACLAB = "isaaclab"
-    METAWORLD = "metaworld"
-    BEHAVIOR = "behavior"
-    CALVIN = "calvin"
-    ROBOCASA = "robocasa"
-    REALWORLD = "realworld"
-    FRANKASIM = "frankasim"
 
 
 def get_env_cls(env_type: str, env_cfg=None, enable_offload=False):
-    """
-    Get environment class based on environment type.
-
-    Args:
-        env_type: Type of environment (e.g., "maniskill", "libero", "isaaclab", etc.)
-        env_cfg: Optional environment configuration. Required for "isaaclab" environment type.
-
-    Returns:
-        Environment class corresponding to the environment type.
-    """
-
+    """Resolve a supported PAWN environment without importing other simulators."""
     env_type = SupportedEnvType(env_type)
-
     if env_type == SupportedEnvType.MANISKILL:
-        if not enable_offload:
-            from rlinf.envs.maniskill.maniskill_env import ManiskillEnv
-        else:
+        if enable_offload:
             from rlinf.envs.maniskill.maniskill_offload_env import (
                 ManiskillOffloadEnv as ManiskillEnv,
             )
-
+        else:
+            from rlinf.envs.maniskill.maniskill_env import ManiskillEnv
         return ManiskillEnv
-    elif env_type == SupportedEnvType.LIBERO:
-        from rlinf.envs.libero.libero_env import LiberoEnv
 
-        return LiberoEnv
-    elif env_type == SupportedEnvType.ROBOTWIN:
-        from rlinf.envs.robotwin.robotwin_env import RoboTwinEnv
+    from rlinf.envs.libero.libero_env import LiberoEnv
 
-        return RoboTwinEnv
-    elif env_type == SupportedEnvType.ISAACLAB:
-        from rlinf.envs.isaaclab import REGISTER_ISAACLAB_ENVS
-
-        if env_cfg is None:
-            raise ValueError(
-                "env_cfg is required for isaaclab environment type. "
-                "Please provide env_cfg.init_params.id to select the task."
-            )
-
-        task_id = env_cfg.init_params.id
-        assert task_id in REGISTER_ISAACLAB_ENVS, (
-            f"Task type {task_id} has not been registered! "
-            f"Available tasks: {list(REGISTER_ISAACLAB_ENVS.keys())}"
-        )
-        return REGISTER_ISAACLAB_ENVS[task_id]
-    elif env_type == SupportedEnvType.METAWORLD:
-        from rlinf.envs.metaworld.metaworld_env import MetaWorldEnv
-
-        return MetaWorldEnv
-    elif env_type == SupportedEnvType.BEHAVIOR:
-        from rlinf.envs.behavior.behavior_env import BehaviorEnv
-
-        return BehaviorEnv
-    elif env_type == SupportedEnvType.CALVIN:
-        from rlinf.envs.calvin.calvin_gym_env import CalvinEnv
-
-        return CalvinEnv
-    elif env_type == SupportedEnvType.ROBOCASA:
-        from rlinf.envs.robocasa.robocasa_env import RobocasaEnv
-
-        return RobocasaEnv
-    elif env_type == SupportedEnvType.REALWORLD:
-        from rlinf.envs.realworld.realworld_env import RealWorldEnv
-
-        return RealWorldEnv
-    elif env_type == SupportedEnvType.FRANKASIM:
-        from rlinf.envs.frankasim.frankasim_env import FrankaSimEnv
-
-        return FrankaSimEnv
-    else:
-        raise NotImplementedError(f"Environment type {env_type} not implemented")
+    return LiberoEnv

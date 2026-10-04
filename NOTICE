@@ -1,0 +1,14 @@
+PAWN
+Preference-Aware Semantic NFT for Online Reinforcement Learning of Flow-based VLAs
+
+This distribution contains modified code from RLinf and pi-StepNFT.
+Upstream source files retain their original copyright and license notices.
+
+RLinf: https://github.com/RLinf/RLinf
+Copyright 2025 The RLinf Authors. Licensed under Apache-2.0.
+
+pi-StepNFT: https://github.com/wangst0181/pi-StepNFT
+Licensed under Apache-2.0.
+
+OpenPI is an external dependency and is not vendored in this distribution.
+Its license and notices remain with the upstream package.

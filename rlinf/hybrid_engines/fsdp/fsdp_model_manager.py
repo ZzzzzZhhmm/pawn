@@ -1,4 +1,5 @@
 # Copyright 2025 The RLinf Authors.
+# Modified for the PAWN OpenPI training release (2026).
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,9 +23,8 @@ from omegaconf import DictConfig
 from torch.amp.grad_scaler import GradScaler
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
-from transformers import AutoConfig, AutoModelForCausalLM, AutoModelForVision2Seq
 
-from rlinf.config import SupportedModel, get_supported_model, torch_dtype_from_precision
+from rlinf.config import torch_dtype_from_precision
 from rlinf.data.tokenizers import hf_tokenizer
 from rlinf.hybrid_engines.fsdp import (
     FSDP,
@@ -124,123 +124,8 @@ class FSDPModelManager:
         return torch.amp.autocast(device_type="cuda", dtype=precision)
 
     def model_provider_func(self) -> torch.nn.Module:
-        """
-        Initialize model used by FSDP actor
-
-        Returns:
-            model: the initialized model.
-        """
-        cfg = self._cfg
-        use_gptq = cfg.model.get("gptq_model", False)
-        load_in_8bit = cfg.model.get("load_in_8bit", False)
-
-        use_triton = cfg.get("use_triton", True)
-
-        assert torch.cuda.is_available(), "CUDA is not available."
-        local_rank = int(os.environ.get("LOCAL_RANK", 0))
-        device = torch.device(f"cuda:{local_rank}")
-
-        model_config = AutoConfig.from_pretrained(
-            cfg.model.model_path,
-            trust_remote_code=True,
-            attn_implementation="flash_attention_2",
-        )
-
-        if use_gptq:
-            from auto_gptq import AutoGPTQForCausalLM  # type: ignore[import-not-found]
-
-            model_wrapper = AutoGPTQForCausalLM.from_quantized(
-                cfg.model.model_path,
-                device=device,
-                use_triton=use_triton,
-            )
-            model = model_wrapper.model
-        elif load_in_8bit:
-            model = AutoModelForCausalLM.from_pretrained(
-                cfg.model.model_path,
-                config=model_config,
-                load_in_8bit=True,
-            )
-        else:
-            if type(model_config) in AutoModelForVision2Seq._model_mapping.keys():
-                auto_model_class = AutoModelForVision2Seq
-            else:
-                auto_model_class = AutoModelForCausalLM
-
-            model = auto_model_class.from_pretrained(
-                cfg.model.model_path,
-                torch_dtype=self.torch_dtype,
-                config=model_config,
-                trust_remote_code=True,
-            )
-
-        if torch.distributed.is_initialized():
-            torch.distributed.barrier()
-
-        if cfg.fsdp_config.use_liger_kernel:
-            self._optimize_with_liger_kernel(model)
-
-        return model
-
-    def _optimize_with_liger_kernel(self, model: torch.nn.Module) -> None:
-        """
-        Replace model modules with liger-kernel optimized modules.
-
-        Args:
-            model: the model to be optimized.
-        """
-        if self._cfg.model.get("gptq_model", False) or self._cfg.model.get(
-            "load_in_8bit", False
-        ):
-            self._logger.info(
-                "[FSDP] Skip using liger-kernel optimized modules for GPTQ/8bit models."
-            )
-            return
-        try:
-            from liger_kernel.transformers import (
-                apply_liger_kernel_to_qwen2,
-                apply_liger_kernel_to_qwen2_5_vl,
-            )
-
-            MODEL_LIGER_KERNEL_APPLY_FUNC = {
-                SupportedModel.QWEN2_5: (
-                    apply_liger_kernel_to_qwen2,
-                    {
-                        "rope": True,
-                        "rms_norm": True,
-                        "swiglu": True,
-                        "fused_linear_cross_entropy": True,
-                    },
-                ),
-                SupportedModel.QWEN2_5_VL: (
-                    apply_liger_kernel_to_qwen2_5_vl,
-                    {
-                        "rope": True,
-                        "rms_norm": True,
-                        "swiglu": True,
-                        "fused_linear_cross_entropy": True,
-                    },
-                ),
-            }
-            model_type = get_supported_model(
-                self._cfg.model.get("model_type", "").lower()
-            )
-            if model_type in MODEL_LIGER_KERNEL_APPLY_FUNC:
-                apply_func, apply_kwargs = MODEL_LIGER_KERNEL_APPLY_FUNC[model_type]
-                apply_func(
-                    model=model,
-                    **apply_kwargs,
-                )
-                self._logger.info(
-                    f"[FSDP] Applied liger-kernel optimizations for model_type: {model_type.value}, used kwargs: {apply_kwargs}"
-                )
-            else:
-                self._logger.info(
-                    f"[FSDP] No liger-kernel optimizations applied for model_type: {model_type.value}"
-                )
-                return
-        except Exception as e:
-            self._logger.warning(f"[FSDP] Liger kernels not applied: {e}")
+        """Implemented by the embodied actor's OpenPI model provider."""
+        raise NotImplementedError
 
     def setup_model_and_optimizer(self) -> None:
         """
@@ -513,8 +398,10 @@ class FSDPModelManager:
                     param.requires_grad = True
                 if param.requires_grad:
                     if (
-                        "value_head" in name or "model.value_head" in name
-                    ) and self.freeze_value_head_after_warmup and self.value_head_frozen:
+                        ("value_head" in name or "model.value_head" in name)
+                        and self.freeze_value_head_after_warmup
+                        and self.value_head_frozen
+                    ):
                         param.requires_grad = False
                     if param.requires_grad:
                         if "value_head" in name or "model.value_head" in name:

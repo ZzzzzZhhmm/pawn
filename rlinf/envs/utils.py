@@ -1,4 +1,5 @@
 # Copyright 2025 The RLinf Authors.
+# Modified for the PAWN OpenPI training release (2026).
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,6 +19,7 @@ from typing import Any, Optional, Union
 
 import imageio
 import numpy as np
+
 # import tensorflow as tf
 import torch
 from PIL import Image, ImageDraw, ImageFont

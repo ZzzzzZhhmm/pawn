@@ -1,4 +1,5 @@
 # Copyright 2025 The RLinf Authors.
+# Modified for the PAWN OpenPI training release (2026).
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -128,34 +129,6 @@ def get_fsdp_wrap_policy(module, config=None, is_lora=False, is_openvla_model=Fa
     # Build policies list
     policies = []
 
-    from rlinf.models.embodiment.modules.resnet_utils import ResNet10
-
-    resnet_policy = functools.partial(_module_wrap_policy, module_classes={ResNet10})
-    policies.append(resnet_policy)
-
-    # Add vision transformer policies for OpenVLA models
-    if is_openvla_model:
-        from prismatic.extern.hf.modeling_prismatic import PrismaticProjector
-        from timm.models.vision_transformer import VisionTransformer
-
-        # Vision transformer policies
-        vit_wrap_policy = functools.partial(
-            _module_wrap_policy, module_classes={VisionTransformer}
-        )
-        policies.append(vit_wrap_policy)
-
-        # Prismatic projector policy for VLA models
-        # The prismatic package initializes a DistributedOverwatch by default,
-        # which initializes accelerate.PartialState, which in turn
-        # initializes a torch.distributed process group in gloo.
-        # This results in default group being gloo, which does not support CUDA tensors and allreduce average.
-
-        prismatic_fsdp_wrapping_policy = functools.partial(
-            _module_wrap_policy,
-            module_classes={PrismaticProjector},
-        )
-        policies.append(prismatic_fsdp_wrapping_policy)
-
     wrap_value_head = config.get("wrap_value_head", True)
     if wrap_value_head and hasattr(module, "value_head"):
         from rlinf.models.embodiment.modules.value_head import ValueHead
@@ -164,19 +137,6 @@ def get_fsdp_wrap_policy(module, config=None, is_lora=False, is_openvla_model=Fa
             _module_wrap_policy, module_classes={ValueHead}
         )
         policies.append(value_head_policy)
-
-    if hasattr(module, "q_head"):
-        from rlinf.models.embodiment.modules.q_head import MultiCrossQHead, MultiQHead
-
-        if isinstance(module.q_head, MultiCrossQHead):
-            q_head_policy = functools.partial(
-                _module_wrap_policy, module_classes={MultiCrossQHead}
-            )
-        else:
-            q_head_policy = functools.partial(
-                _module_wrap_policy, module_classes={MultiQHead}
-            )
-        policies.append(q_head_policy)
 
     # Add transformer layer policies
     if fsdp_transformer_layer_cls_to_wrap is not None:

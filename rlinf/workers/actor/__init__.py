@@ -1,4 +1,5 @@
 # Copyright 2025 The RLinf Authors.
+# Modified for the PAWN OpenPI training release (2026).
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,14 +18,8 @@ from omegaconf import DictConfig
 from rlinf.scheduler.worker.worker import Worker
 
 
-def get_actor_worker(cfg: DictConfig) -> Worker:
-    if cfg.actor.training_backend == "fsdp":
-        from .fsdp_actor_worker import FSDPActor
-
-        return FSDPActor
-    elif cfg.actor.training_backend == "megatron":
-        from .megatron_actor_worker import MegatronActor
-
-        return MegatronActor
-    else:
+def get_actor_worker(cfg: DictConfig) -> type[Worker]:
+    if cfg.actor.training_backend != "fsdp":
         raise ValueError(f"Unsupported training backend: {cfg.actor.training_backend}")
+    from .fsdp_actor_worker import EmbodiedFSDPActor
+    return EmbodiedFSDPActor
